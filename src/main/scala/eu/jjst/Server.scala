@@ -13,8 +13,6 @@ object Server extends App with WebSocketRoutes {
   implicit val system: ActorSystem = ActorSystem()
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
-  val userRegistryActor: ActorRef = system.actorOf(UserRegistryActor.props, "userRegistryActor")
-
   lazy val routes: Route = websocketRoute
 
   Http().bindAndHandle(routes, "localhost", 8080)

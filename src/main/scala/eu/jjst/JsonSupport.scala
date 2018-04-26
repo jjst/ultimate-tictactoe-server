@@ -1,18 +1,25 @@
 package eu.jjst
 
-import eu.jjst.UserRegistryActor.ActionPerformed
+import eu.jjst.models.{ Coords, Move }
+import io.circe.generic.extras.Configuration
+import io.circe.{ Decoder, Encoder }
+import io.circe.generic.extras.semiauto._
 
-//#json-support
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import spray.json.DefaultJsonProtocol
+trait JsonSupport {
+  implicit val conf: Configuration =
+    Configuration.default
+      .withDefaults
+      .withDiscriminator("message_type")
+      .withSnakeCaseMemberNames
 
-trait JsonSupport extends SprayJsonSupport {
-  // import the default encoders for primitive types (Int, String, Lists etc)
-  import DefaultJsonProtocol._
+  implicit val coordsEncoder: Encoder[Coords] = deriveEncoder
+  implicit val coordsDecoder: Decoder[Coords] = deriveDecoder
 
-  implicit val userJsonFormat = jsonFormat3(User)
-  implicit val usersJsonFormat = jsonFormat1(Users)
+  implicit val moveEncoder: Encoder[Move] = deriveEncoder
+  implicit val moveDecoder: Decoder[Move] = deriveDecoder
 
-  implicit val actionPerformedJsonFormat = jsonFormat1(ActionPerformed)
+  implicit val messageEncoder: Encoder[GameMessage] = deriveEncoder
+  implicit val messageDecoder: Decoder[GameMessage] = deriveDecoder
 }
-//#json-support
+
+object JsonSupport extends JsonSupport
