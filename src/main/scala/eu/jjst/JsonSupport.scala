@@ -12,14 +12,14 @@ trait JsonSupport {
       .withDiscriminator("message_type")
       .withSnakeCaseMemberNames
 
-  implicit val coordsEncoder: Encoder[Coords] = deriveEncoder
-  implicit val coordsDecoder: Decoder[Coords] = deriveDecoder
+  implicit val coordsEncoder: Encoder[Coords] = deriveEncoder[Coords]
+  implicit val coordsDecoder: Decoder[Coords] = deriveDecoder[Coords]
 
-  implicit val moveEncoder: Encoder[Move] = deriveEncoder
-  implicit val moveDecoder: Decoder[Move] = deriveDecoder
+  implicit val moveEncoder: Encoder[Move] = deriveEncoder[Move]
+  implicit val moveDecoder: Decoder[Move] = deriveDecoder[Move]
 
-  implicit val messageEncoder: Encoder[GameMessage] = deriveEncoder
-  implicit val messageDecoder: Decoder[GameMessage] = deriveDecoder
+  implicit val messageEncoder: Encoder[GameMessage] = deriveEncoder[GameMessage]
+  implicit val messageDecoder: Decoder[GameMessage] = deriveDecoder[GameMessage]
 }
 
 object JsonSupport extends JsonSupport

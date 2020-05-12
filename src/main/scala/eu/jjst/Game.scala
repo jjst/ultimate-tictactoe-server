@@ -33,7 +33,7 @@ class GameActor extends Actor {
       val ref = subscribers(player)
       // report downstream of completion, otherwise, there's a risk of leaking the
       // downstream when the TCP connection is only half-closed
-      ref ! Status.Success(Unit)
+      ref ! Status.Success(())
       subscribers -= player
       log.info(s"Player left: $player")
       dispatch(player, GameMessage.PlayerLeft)
