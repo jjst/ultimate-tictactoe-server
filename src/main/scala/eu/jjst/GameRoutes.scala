@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import cats.effect.concurrent.Ref
 import cats.effect.{ Blocker, ContextShift, Sync }
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.{ AllGames, GameState, InputMessage, OutputMessage }
+import eu.jjst.Models.{ GameServerState, GameState, InputMessage, OutputMessage }
 import fs2.concurrent.{ Queue, Topic }
 import fs2.{ Pipe, Stream }
 import org.http4s.dsl.Http4sDsl
@@ -16,8 +16,10 @@ import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{ Close, Text }
 import org.http4s.{ HttpRoutes, MediaType, StaticFile }
 
+import TextCodecs._
+
 class GameRoutes[F[_]: Sync: ContextShift](
-  games: Ref[F, AllGames],
+  games: Ref[F, GameServerState],
   queue: Queue[F, InputMessage],
   topic: Topic[F, OutputMessage]) extends Http4sDsl[F] {
 
@@ -80,11 +82,10 @@ class GameRoutes[F[_]: Sync: ContextShift](
           topic
             .subscribe(1000)
             .filter(_.forPlayer(playerId))
-            .map(msg => Text(msg.toString))
+            .map(msg => Text(eu.jjst.Text.encode(msg)))
 
         // Function that converts a stream of one type to another. Effectively an external "map" function
         def processInput(wsfStream: Stream[F, WebSocketFrame]) = {
-          import TextCodecs._
           // Stream of initialization events for a user
           val entryStream = Stream.emits(Seq(JoinGame(playerId, gameId)))
 
@@ -93,8 +94,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
             wsfStream
               .collect {
                 case Text(text, _) => {
-                  val move = eu.jjst.Text.decode(text)
-                  PlayMove(playerId, gameId, move)
+                  eu.jjst.Text.decode[InputMessage](text)
                 }
 
                 // Convert the terminal WebSocket event to a User disconnect message
