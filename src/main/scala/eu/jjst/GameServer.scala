@@ -50,7 +50,7 @@ object ChatServer extends IOApp {
         // 4. Publish output messages to the publish/subscribe topic
         val processingStream =
           queue.dequeue
-            .evalMap(msg => ref.modify(_.process(msg)))
+            .evalMap(msg => ref.modify(_.update(msg)))
             .flatMap(Stream.emits)
             .through(topic.publish)
 

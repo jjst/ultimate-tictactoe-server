@@ -1,7 +1,8 @@
 package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
-import eu.jjst.Models.InputMessage.JoinGame
+import eu.jjst.Models.InputMessage.{JoinGame, PlayMove}
+import eu.jjst.Models.OutputMessage.GameStarted
 
 object Models {
   case class Coords(x: Int, y: Int)
@@ -23,8 +24,7 @@ object Models {
   case class WaitingForPlayers(players: List[PlayerId]) extends GameState {
     def readyToStart: Boolean = players.size >= 2
     def add(p: PlayerId): GameState = {
-      val g = WaitingForPlayers(p :: players)
-      if (g.readyToStart) g.start() else g
+      WaitingForPlayers(p :: players)
     }
     def start(): GameInProgress = GameInProgress(activePlayer = Player.X, moves = List.empty)
   }
@@ -36,16 +36,36 @@ object Models {
   case class GameServerState(games: Map[GameId, GameState]) extends LazyLogging {
     def update(inputMessage: InputMessage): (GameServerState, Seq[OutputMessage]) = inputMessage match {
       case JoinGame(playerId, gameId) => {
-        games.get(gameId) match {
-          case None => {
-            logger.error(s"Unknown game id: $gameId")
-            (this, Seq.empty)
-          }
-          case Some(game) => {
-            game match {
-              case game: WaitingForPlayers => {
-                games.updated(gameId, game.add(playerId))
+        joinGame(playerId, gameId)
+      }
+      case PlayMove(playerId, gameId, move) => {
+
+      }
+    }
+
+    private def joinGame(playerId: PlayerId, gameId: GameId): (GameServerState, Seq[OutputMessage]) = {
+      games.get(gameId) match {
+        case None => {
+          logger.error(s"Unknown game id: $gameId")
+          (this, Seq.empty)
+        }
+        case Some(game) => {
+          game match {
+            case game: WaitingForPlayers => {
+              val newGame = {
+                game.add(playerId)
+                if (game.readyToStart) {
+                  game.start()
+                } else {
+                  game
+                }
               }
+              val gameServerState = GameServerState(games.updated(gameId, newGame))
+              val msgs = newGame match {
+                case _: GameInProgress => Seq(GameStarted)
+                case _ => Seq.empty
+              }
+              (gameServerState, msgs)
             }
           }
         }

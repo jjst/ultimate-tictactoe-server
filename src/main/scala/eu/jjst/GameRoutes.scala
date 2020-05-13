@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import cats.effect.concurrent.Ref
 import cats.effect.{ Blocker, ContextShift, Sync }
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.{ GameServerState, GameState, InputMessage, OutputMessage }
+import eu.jjst.Models.{ GameServerState, GameState, InputMessage, Move, OutputMessage }
 import fs2.concurrent.{ Queue, Topic }
 import fs2.{ Pipe, Stream }
 import org.http4s.dsl.Http4sDsl
@@ -15,7 +15,6 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{ Close, Text }
 import org.http4s.{ HttpRoutes, MediaType, StaticFile }
-
 import TextCodecs._
 
 class GameRoutes[F[_]: Sync: ContextShift](
@@ -94,7 +93,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
             wsfStream
               .collect {
                 case Text(text, _) => {
-                  eu.jjst.Text.decode[InputMessage](text)
+                  PlayMove(playerId, gameId, eu.jjst.Text.decode[Move](text))
                 }
 
                 // Convert the terminal WebSocket event to a User disconnect message

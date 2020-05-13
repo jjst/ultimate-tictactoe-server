@@ -42,14 +42,6 @@ object TextCodecs {
     }
   }
 
-  implicit val inputMessageDecoder: TextDecoder[InputMessage] = new TextDecoder[InputMessage] {
-    override def decode(txt: String): InputMessage = txt.split(" ") match {
-      case Array("J", playerId, gameId) => JoinGame(playerId, gameId)
-      case Array("L", playerId, gameId) => LeaveGame(playerId, gameId)
-      case arr if arr.headOption == Some("M") => PlayMove(moveDecoder.decode(txt))
-    }
-  }
-
   implicit val outputMessageEncoder: TextEncoder[OutputMessage] = new TextEncoder[OutputMessage] {
     override def encode(m: OutputMessage): String = m match {
       case KeepAlive => "K"
