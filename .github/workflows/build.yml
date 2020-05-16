@@ -31,6 +31,8 @@ jobs:
       env:
         VERSION: $GITHUB_BUILD_NUMBER
       run: sbt assembly
+    - name: Display the path
+      run: ls -l $GITHUB_WORKSPACE/target/scala-2.13/
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2
       env:
