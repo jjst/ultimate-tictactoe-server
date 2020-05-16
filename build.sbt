@@ -1,6 +1,8 @@
 lazy val circeVersion = "0.13.0"
 lazy val http4sVersion = "0.21.0"
 
+enablePlugins(JavaAppPackaging)
+
 onChangedBuildSource := ReloadOnSourceChanges
 
 organization    := "eu.jjst"
