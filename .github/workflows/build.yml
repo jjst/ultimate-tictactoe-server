@@ -29,14 +29,12 @@ jobs:
       with:
         path: ~/.sbt
         key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt') }}
-    - name: Build assembly
-      run: sbt assembly
-    - name: Display the path
-      run: ls -l $GITHUB_WORKSPACE/target/scala-2.13/ultimate-tictactoe-server-assembly-${VERSION}.jar
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v2
+    - name: Install SSH key
+      uses: shimataro/ssh-key-action@v2
       with:
-        # Artifact name
-        name: assembly
-        # A file, directory or wildcard pattern that describes what to upload
-        path: ${{ github.workspace }}/target/scala-2.13/ultimate-tictactoe-server-assembly-${{ env.VERSION }}.jar
+         key: ${{ secrets.SSH_PRIVATE_KEY }}
+         known_hosts: ${{ secrets.KNOWN_HOSTS }}
+         name: id_rsa # optional
+    - name: Deploy on Scalingo
+      run: git push git@ssh.osc-fr1.scalingo.com:ultimate-tictactoe-server.git $GITHUB_SHA:master
+
