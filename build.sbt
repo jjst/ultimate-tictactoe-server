@@ -5,7 +5,7 @@ onChangedBuildSource := ReloadOnSourceChanges
 
 organization    := "eu.jjst"
 scalaVersion    := "2.13.1"
-name := "akka http websockets"
+name := "ultimate-tictactoe-server"
 
 libraryDependencies ++= Seq(
   "org.http4s"     %% "http4s-blaze-server" % http4sVersion,
@@ -17,6 +17,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser" % circeVersion,
 
   "com.typesafe.scala-logging" %% "scala-logging" % "3.9.2",
+  "ch.qos.logback" % "logback-classic" % "1.2.3",
 
   "org.scalatest"     %% "scalatest"            % "3.1.1"         % Test
 )

@@ -3,8 +3,9 @@ package eu.jjst
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import com.typesafe.scalalogging.LazyLogging
 import eu.jjst.Models.OutputMessage.KeepAlive
-import eu.jjst.Models.{ GameServerState, GameState, InputMessage, OutputMessage }
+import eu.jjst.Models.{ Game, GameServerState, InputMessage, OutputMessage }
 import fs2.Stream
 import fs2.concurrent.{ Queue, Topic }
 import org.http4s.server.Router
@@ -17,7 +18,7 @@ import scala.util.Try
 /*
  * Application entry point
  */
-object ChatServer extends IOApp {
+object ChatServer extends IOApp with LazyLogging {
   def run(args: List[String]): IO[ExitCode] = {
     // Get a tcp port that might be specified on the command line or in an environment variable
     val httpPort = args.headOption
@@ -25,8 +26,9 @@ object ChatServer extends IOApp {
       .flatMap(s => Try(s.toInt).toOption) // Ignore any integer parse errors
       .getOrElse(8080)
 
-    val initialMessage = ???
+    val initialMessage = KeepAlive
     for { // Synchronization objects must be created at a level where they can be shared with every object that needs them
+      _ <- IO(logger.debug("Starting server"))
       queue <- Queue.unbounded[IO, InputMessage];
       topic <- Topic[IO, OutputMessage](initialMessage);
 
@@ -50,8 +52,14 @@ object ChatServer extends IOApp {
         // 4. Publish output messages to the publish/subscribe topic
         val processingStream =
           queue.dequeue
+            .evalTap { msg =>
+              IO(logger.debug(s"Received input message: $msg"))
+            }
             .evalMap(msg => ref.modify(_.update(msg)))
             .flatMap(Stream.emits)
+            .evalTap { msg =>
+              IO(logger.debug(s"Sending output message: $msg"))
+            }
             .through(topic.publish)
 
         // fs2 Streams must be "pulled" to process messages. Drain will perpetually pull our top-level streams

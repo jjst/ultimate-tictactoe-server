@@ -6,7 +6,7 @@ import java.util.concurrent.Executors
 import cats.effect.concurrent.Ref
 import cats.effect.{ Blocker, ContextShift, Sync }
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.{ GameServerState, GameState, InputMessage, Move, OutputMessage }
+import eu.jjst.Models.{ Game, GameServerState, InputMessage, Move, OutputMessage, Player }
 import fs2.concurrent.{ Queue, Topic }
 import fs2.{ Pipe, Stream }
 import org.http4s.dsl.Http4sDsl
@@ -16,11 +16,12 @@ import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{ Close, Text }
 import org.http4s.{ HttpRoutes, MediaType, StaticFile }
 import TextCodecs._
+import com.typesafe.scalalogging.LazyLogging
 
 class GameRoutes[F[_]: Sync: ContextShift](
   games: Ref[F, GameServerState],
   queue: Queue[F, InputMessage],
-  topic: Topic[F, OutputMessage]) extends Http4sDsl[F] {
+  topic: Topic[F, OutputMessage]) extends Http4sDsl[F] with LazyLogging {
 
   private val blocker = {
     val numBlockingThreadsForFilesystem = 4
@@ -75,29 +76,32 @@ class GameRoutes[F[_]: Sync: ContextShift](
 
         Ok(outputStream, `Content-Type`(MediaType.text.html))
       // Bind a WebSocket connection for a user
-      case GET -> Root / "games" / "ws" / gameId / playerId =>
+      case GET -> Root / "games" / "ws" / gameId / p => {
+        val player: Player = p.toLowerCase match {
+          case "x" => Player.X
+          case "o" => Player.O
+        }
         // Routes messages from our "topic" to a WebSocket
         val toClient =
           topic
             .subscribe(1000)
-            .filter(_.forPlayer(playerId))
             .map(msg => Text(eu.jjst.Text.encode(msg)))
 
         // Function that converts a stream of one type to another. Effectively an external "map" function
         def processInput(wsfStream: Stream[F, WebSocketFrame]) = {
           // Stream of initialization events for a user
-          val entryStream = Stream.emits(Seq(JoinGame(playerId, gameId)))
+          val entryStream = Stream.emits(Seq(JoinGame(gameId, player)))
 
           // Stream that transforms between raw text from the client and parsed InputMessage objects
           val parsedWebSocketInput =
             wsfStream
               .collect {
                 case Text(text, _) => {
-                  PlayMove(playerId, gameId, eu.jjst.Text.decode[Move](text))
+                  PlayMove(gameId, eu.jjst.Text.decode[Move](text))
                 }
 
                 // Convert the terminal WebSocket event to a User disconnect message
-                case Close(_) => LeaveGame(playerId, gameId)
+                case Close(_) => LeaveGame(gameId, player)
               }
 
           // Create a stream that has all of the user input sandwiched between the entry and disconnect messages
@@ -109,6 +113,8 @@ class GameRoutes[F[_]: Sync: ContextShift](
         val inputPipe: Pipe[F, WebSocketFrame, Unit] = processInput
 
         // Build the WebSocket handler
+        logger.debug("Creating new web socket handler")
         WebSocketBuilder[F].build(toClient, inputPipe)
+      }
     }
 }

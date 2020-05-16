@@ -1,8 +1,8 @@
 package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
-import eu.jjst.Models.InputMessage.{JoinGame, PlayMove}
-import eu.jjst.Models.OutputMessage.GameStarted
+import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
+import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted }
 
 object Models {
   case class Coords(x: Int, y: Int)
@@ -19,68 +19,111 @@ object Models {
     case object O extends Player
   }
 
-  trait GameState
+  trait Game {
+    def enoughPlayers: Boolean
+  }
 
-  case class WaitingForPlayers(players: List[PlayerId]) extends GameState {
-    def readyToStart: Boolean = players.size >= 2
-    def add(p: PlayerId): GameState = {
-      WaitingForPlayers(p :: players)
+  object Game {
+    def create(): Game = {
+      WaitingForPlayers(Set(Player.X, Player.O))
     }
-    def start(): GameInProgress = GameInProgress(activePlayer = Player.X, moves = List.empty)
+  }
+
+  case class WaitingForPlayers(players: Set[Player]) extends Game {
+    override def enoughPlayers: Boolean = players.isEmpty
+    def add(p: Player): Game = {
+      val waitingOnPlayers = players - p
+      if (waitingOnPlayers.isEmpty) this.start()
+      else WaitingForPlayers(waitingOnPlayers)
+    }
+    private def start(): GameInProgress = GameInProgress(activePlayer = Player.X, moves = List.empty)
   }
 
   case class GameInProgress(
     activePlayer: Player,
-    moves: List[Move]) extends GameState
+    moves: List[Move]) extends Game {
+    override def enoughPlayers: Boolean = true
+  }
 
-  case class GameServerState(games: Map[GameId, GameState]) extends LazyLogging {
+  case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
     def update(inputMessage: InputMessage): (GameServerState, Seq[OutputMessage]) = inputMessage match {
-      case JoinGame(playerId, gameId) => {
-        joinGame(playerId, gameId)
+      case JoinGame(gameId, player) => {
+        joinGame(gameId, player)
       }
-      case PlayMove(playerId, gameId, move) => {
-
+      case LeaveGame(gameId, player) => {
+        ???
+      }
+      case PlayMove(gameId, move) => {
+        games.get(gameId) match {
+          case None => {
+            logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
+            (this, Seq.empty)
+          }
+          case Some(_: WaitingForPlayers) => {
+            logger.error(s"[game: $gameId] Game not in progress")
+            (this, Seq.empty)
+          }
+          case Some(GameInProgress(activePlayer, moves)) => {
+            if (move.player != activePlayer) {
+              logger.error(s"[game: $gameId] ${move.player} cannot play, they are not the active player!")
+              (this, Seq.empty)
+            } else {
+              val newGameState = {
+                val newActivePlayer = activePlayer match {
+                  case Player.X => Player.O
+                  case Player.O => Player.X
+                }
+                GameInProgress(newActivePlayer, move :: moves)
+              }
+              logger.debug(s"[game: $gameId] ${move.player} played move: ${move}")
+              (this.copy(games.updated(gameId, newGameState)), Seq(GameChange(move)))
+            }
+          }
+        }
       }
     }
 
-    private def joinGame(playerId: PlayerId, gameId: GameId): (GameServerState, Seq[OutputMessage]) = {
+    private def joinGame(gameId: GameId, player: Player): (GameServerState, Seq[OutputMessage]) = {
       games.get(gameId) match {
         case None => {
-          logger.error(s"Unknown game id: $gameId")
-          (this, Seq.empty)
+          logger.info(s"[game: $gameId] Game doesn't exist, creating")
+          createGame(gameId).joinGame(gameId, player)
         }
         case Some(game) => {
-          game match {
-            case game: WaitingForPlayers => {
-              val newGame = {
-                game.add(playerId)
-                if (game.readyToStart) {
-                  game.start()
-                } else {
-                  game
-                }
-              }
-              val gameServerState = GameServerState(games.updated(gameId, newGame))
-              val msgs = newGame match {
-                case _: GameInProgress => Seq(GameStarted)
-                case _ => Seq.empty
-              }
-              (gameServerState, msgs)
-            }
-          }
+          joinExistingGame(gameId, game, player)
+        }
+      }
+    }
+
+    private def createGame(gameId: GameId): GameServerState = {
+      GameServerState(this.games.updated(gameId, Game.create()))
+    }
+
+    private def joinExistingGame(gameId: GameId, game: Game, player: Player) = {
+      game match {
+        case game: WaitingForPlayers => {
+          val newGame = game.add(player)
+          logger.info(s"[game: $gameId] Player $player joined")
+          logger.debug(s"[game: $gameId] New game state: $newGame")
+          val msgs = if (newGame.enoughPlayers) {
+            logger.info(s"[game: ${gameId}] Enough players joined, starting game")
+            Seq(GameStarted)
+          } else Seq.empty
+          val gameServerState = GameServerState(this.games.updated(gameId, newGame))
+          (gameServerState, msgs)
         }
       }
     }
   }
 
   sealed trait InputMessage {
-    val playerId: PlayerId
+    val gameId: GameId
   }
 
   object InputMessage {
-    case class JoinGame(playerId: PlayerId, gameId: GameId) extends InputMessage
-    case class LeaveGame(playerId: PlayerId, gameId: GameId) extends InputMessage
-    case class PlayMove(playerId: PlayerId, gameId: GameId, move: Move) extends InputMessage
+    case class JoinGame(gameId: GameId, player: Player) extends InputMessage
+    case class LeaveGame(gameId: GameId, player: Player) extends InputMessage
+    case class PlayMove(gameId: GameId, move: Move) extends InputMessage
   }
 
   trait OutputMessage {
