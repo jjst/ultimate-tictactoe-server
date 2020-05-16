@@ -17,5 +17,16 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
-    - name: Run tests
-      run: sbt test
+    - name: Build assembly
+      env:
+        VERSION: $GITHUB_BUILD_NUMBER
+      run: sbt assembly
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2
+      env:
+        VERSION: $GITHUB_BUILD_NUMBER
+      with:
+        # Artifact name
+        name: assembly
+        # A file, directory or wildcard pattern that describes what to upload
+        path: $GITHUB_WORKSPACE/target/scala-2.13/ultimate-tictactoe-server-assembly-$VERSION.jar
