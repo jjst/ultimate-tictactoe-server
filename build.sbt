@@ -6,6 +6,7 @@ onChangedBuildSource := ReloadOnSourceChanges
 organization    := "eu.jjst"
 scalaVersion    := "2.13.1"
 name := "ultimate-tictactoe-server"
+version := sys.env.getOrElse("VERSION", "0.0.0-SNAPSHOT")
 
 libraryDependencies ++= Seq(
   "org.http4s"     %% "http4s-blaze-server" % http4sVersion,
