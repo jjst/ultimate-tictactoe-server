@@ -17,6 +17,8 @@ jobs:
       uses: actions/setup-java@v1
       with:
         java-version: 1.8
+    - name: Set version
+      run: echo "::set-env name=VERSION::$GITHUB_RUN_NUMBER"
     - name: Cache SBT ivy cache
       uses: actions/cache@v1.2.0
       with:
@@ -28,15 +30,11 @@ jobs:
         path: ~/.sbt
         key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt') }}
     - name: Build assembly
-      env:
-        VERSION: $GITHUB_BUILD_NUMBER
       run: sbt assembly
     - name: Display the path
       run: ls -l $GITHUB_WORKSPACE/target/scala-2.13/
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2
-      env:
-        VERSION: $GITHUB_BUILD_NUMBER
       with:
         # Artifact name
         name: assembly
