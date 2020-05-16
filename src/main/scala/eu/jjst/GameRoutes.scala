@@ -76,7 +76,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
 
         Ok(outputStream, `Content-Type`(MediaType.text.html))
       // Bind a WebSocket connection for a user
-      case GET -> Root / "games" / "ws" / gameId / p => {
+      case GET -> Root / "games" / gameId / "ws" / p => {
         val player: Player = p.toLowerCase match {
           case "x" => Player.X
           case "o" => Player.O
