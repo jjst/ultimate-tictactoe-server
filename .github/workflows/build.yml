@@ -32,7 +32,7 @@ jobs:
     - name: Build assembly
       run: sbt assembly
     - name: Display the path
-      run: ls -l $GITHUB_WORKSPACE/target/scala-2.13/
+      run: ls -l $GITHUB_WORKSPACE/target/scala-2.13/ultimate-tictactoe-server-assembly-${VERSION}.jar
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2
       with:
