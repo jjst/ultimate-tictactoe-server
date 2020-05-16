@@ -33,9 +33,8 @@ jobs:
       uses: shimataro/ssh-key-action@v2
       with:
          key: ${{ secrets.SSH_PRIVATE_KEY }}
+         known_hosts: ${{ secrets.KNOWN_HOSTS }}
          name: id_rsa # optional
-    - name: Add Scalingo to known_hosts
-      run: ssh-keyscan -H ssh.osc-fr1.scalingo.com >> ~/.ssh/known_hosts
     - name: Deploy on Scalingo
       run: git push git@ssh.osc-fr1.scalingo.com:ultimate-tictactoe-server.git $VERSION:master
 
