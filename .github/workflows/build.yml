@@ -31,6 +31,8 @@ jobs:
       with:
         path: ~/.sbt
         key: ${{ runner.os }}-sbt-${{ hashFiles('**/build.sbt') }}
+    - name: Run tests
+      run: sbt test
     - name: Install SSH key
       uses: shimataro/ssh-key-action@v2
       with:
@@ -38,5 +40,5 @@ jobs:
          known_hosts: ${{ secrets.KNOWN_HOSTS }}
          name: id_rsa # optional
     - name: Deploy on Scalingo
-      run: git push -f git@ssh.osc-fr1.scalingo.com:ultimate-tictactoe-server.git $GITHUB_SHA:master
+      run: git push git@ssh.osc-fr1.scalingo.com:ultimate-tictactoe-server.git $GITHUB_SHA:master
 
