@@ -3,8 +3,9 @@ package eu.jjst
 import java.io.File
 import java.util.concurrent.Executors
 
+import cats.implicits._
 import cats.effect.concurrent.Ref
-import cats.effect.{ Blocker, ContextShift, Sync }
+import cats.effect.{ Blocker, ContextShift, IO, Sync }
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
 import eu.jjst.Models.{ Game, GameServerState, InputMessage, Move, OutputMessage, Player }
 import fs2.concurrent.{ Queue, Topic }
@@ -19,7 +20,7 @@ import TextCodecs._
 import com.typesafe.scalalogging.LazyLogging
 
 class GameRoutes[F[_]: Sync: ContextShift](
-  games: Ref[F, GameServerState],
+  gameServerState: Ref[F, GameServerState],
   queue: Queue[F, InputMessage],
   topic: Topic[F, OutputMessage]) extends Http4sDsl[F] with LazyLogging {
 
@@ -45,7 +46,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
       // Read the current state and format some stats in HTML
       case GET -> Root / "metrics" =>
         val outputStream = Stream
-          .eval(games.get)
+          .eval(gameServerState.get)
           .map(state =>
             s"""
                |<html>
@@ -61,9 +62,26 @@ class GameRoutes[F[_]: Sync: ContextShift](
       case POST -> Root / "games" =>
         Ok(???, `Content-Type`(MediaType.text.html))
 
+      case PUT -> Root / "games" / gameId => {
+        sealed trait CreateResult
+        case object AlreadyExists extends CreateResult
+        case object Success extends CreateResult
+
+        gameServerState
+          .modify { state =>
+            state.games.get(gameId) match {
+              case Some(_) => (state, AlreadyExists)
+              case None => (state.createGame(gameId), Success)
+            }
+          }
+          .flatMap {
+            case Success => Created()
+            case AlreadyExists => Conflict()
+          }
+      }
       case GET -> Root / "games" / gameId / "debug" =>
         val outputStream = Stream
-          .eval(games.get)
+          .eval(gameServerState.get)
           .map(state =>
             s"""
                |<html>

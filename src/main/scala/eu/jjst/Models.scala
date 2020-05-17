@@ -100,7 +100,7 @@ object Models {
       }
     }
 
-    private def createGame(gameId: GameId): GameServerState = {
+    def createGame(gameId: GameId): GameServerState = {
       GameServerState(this.games.updated(gameId, Game.create()))
     }
 
