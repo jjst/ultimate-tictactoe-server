@@ -14,6 +14,7 @@ import org.http4s.syntax.kleisli._
 
 import scala.concurrent.duration._
 import scala.util.Try
+import org.http4s.server.middleware._
 
 /*
  * Application entry point
@@ -81,6 +82,6 @@ object ServerStream {
       .bindHttp(port, "0.0.0.0")
       .withHttpApp(
         Router(
-          "/" -> new GameRoutes[F](games, queue, topic).routes).orNotFound)
+          "/" -> CORS(new GameRoutes[F](games, queue, topic).routes)).orNotFound)
       .serve
 }

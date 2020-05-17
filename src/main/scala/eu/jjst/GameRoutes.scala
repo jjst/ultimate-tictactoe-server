@@ -32,17 +32,6 @@ class GameRoutes[F[_]: Sync: ContextShift](
 
   val routes: HttpRoutes[F] =
     HttpRoutes.of[F] {
-      // Static resources
-      case request @ GET -> Root =>
-        StaticFile
-          .fromFile(new File("static/index.html"), blocker, Some(request))
-          .getOrElseF(NotFound())
-
-      case request @ GET -> Root / "chat.js" =>
-        StaticFile
-          .fromFile(new File("static/chat.js"), blocker, Some(request))
-          .getOrElseF(NotFound())
-
       // Read the current state and format some stats in HTML
       case GET -> Root / "metrics" =>
         val outputStream = Stream
@@ -58,9 +47,6 @@ class GameRoutes[F[_]: Sync: ContextShift](
               """.stripMargin)
 
         Ok(outputStream, `Content-Type`(MediaType.text.html))
-
-      case POST -> Root / "games" =>
-        Ok(???, `Content-Type`(MediaType.text.html))
 
       case PUT -> Root / "games" / gameId => {
         sealed trait CreateResult
