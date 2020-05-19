@@ -1,20 +1,22 @@
 package eu.jjst
 
+import cats.data.Kleisli
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import eu.jjst.Models.OutputMessage.KeepAlive
-import eu.jjst.Models.{ Game, GameServerState, InputMessage, OutputMessage }
+import eu.jjst.Models.{ InputMessage, OutputMessage }
 import fs2.Stream
 import fs2.concurrent.{ Queue, Topic }
+import org.http4s.{ HttpRoutes, Request, Response }
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.server.middleware._
 import org.http4s.syntax.kleisli._
 
 import scala.concurrent.duration._
 import scala.util.Try
-import org.http4s.server.middleware._
 
 /*
  * Application entry point
@@ -77,11 +79,12 @@ object ServerStream {
     port: Int,
     games: Ref[F, GameServerState],
     queue: Queue[F, InputMessage],
-    topic: Topic[F, OutputMessage]): fs2.Stream[F, ExitCode] =
+    topic: Topic[F, OutputMessage]): fs2.Stream[F, ExitCode] = {
+    val routes = Logger.httpRoutes(logHeaders = true, logBody = true)(CORS(new GameRoutes[F](games, queue, topic).routes))
     BlazeServerBuilder[F]
       .bindHttp(port, "0.0.0.0")
       .withHttpApp(
-        Router(
-          "/" -> CORS(new GameRoutes[F](games, queue, topic).routes)).orNotFound)
+        Router("/" -> routes).orNotFound)
       .serve
+  }
 }

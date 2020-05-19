@@ -1,8 +1,10 @@
 package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
+import eu.jjst.GameServerState._
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
 import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted, WaitingForPlayers }
+import eu.jjst.Models._
 
 object Models {
   case class Coords(x: Int, y: Int)
@@ -38,85 +40,6 @@ object Models {
     def enoughPlayers: Boolean = playersInGame.size >= 2
   }
 
-  case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
-    def update(inputMessage: InputMessage): (GameServerState, Seq[OutputMessage]) = inputMessage match {
-      case JoinGame(gameId, player) => {
-        joinGame(gameId, player)
-      }
-      case LeaveGame(gameId, player) => {
-        leaveGame(gameId, player)
-      }
-      case PlayMove(gameId, move) => {
-        games.get(gameId) match {
-          case None => {
-            logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
-            (this, Seq.empty)
-          }
-          case Some(g) if !g.enoughPlayers => {
-            logger.error(s"[game: $gameId] Game not in progress")
-            (this, Seq.empty)
-          }
-          case Some(Game(players, activePlayer, moves)) => {
-            if (move.player != activePlayer) {
-              logger.error(s"[game: $gameId] ${move.player} cannot play, they are not the active player!")
-              (this, Seq.empty)
-            } else {
-              val newGameState = {
-                val newActivePlayer = activePlayer match {
-                  case Player.X => Player.O
-                  case Player.O => Player.X
-                }
-                Game(players, newActivePlayer, move :: moves)
-              }
-              logger.debug(s"[game: $gameId] ${move.player} played move: ${move}")
-              (this.copy(games.updated(gameId, newGameState)), Seq(GameChange(move)))
-            }
-          }
-        }
-      }
-    }
-
-    private def joinGame(gameId: GameId, player: Player): (GameServerState, Seq[OutputMessage]) = {
-      games.get(gameId) match {
-        case None => {
-          logger.info(s"[game: $gameId] Game doesn't exist, creating")
-          createGame(gameId).joinGame(gameId, player)
-        }
-        case Some(game) => {
-          joinExistingGame(gameId, game, player)
-        }
-      }
-    }
-
-    private def leaveGame(gameId: GameId, player: Player): (GameServerState, Seq[OutputMessage]) = {
-      games.get(gameId) match {
-        case None => {
-          logger.warn(s"[game: $gameId] Game doesn't exist, creating")
-          (this, Seq.empty)
-        }
-        case Some(game) => {
-          (this.copy(games.updated(gameId, game.copy(playersInGame = game.playersInGame - player))), Seq(WaitingForPlayers))
-        }
-      }
-    }
-
-    def createGame(gameId: GameId): GameServerState = {
-      GameServerState(this.games.updated(gameId, Game.create()))
-    }
-
-    private def joinExistingGame(gameId: GameId, game: Game, player: Player) = {
-      val newGame = game.add(player)
-      logger.info(s"[game: $gameId] Player $player joined")
-      logger.debug(s"[game: $gameId] New game state: $newGame")
-      val msgs = if (newGame.enoughPlayers) {
-        logger.info(s"[game: ${gameId}] Enough players joined, starting game")
-        Seq(GameStarted)
-      } else Seq.empty
-      val gameServerState = GameServerState(this.games.updated(gameId, newGame))
-      (gameServerState, msgs)
-    }
-  }
-
   sealed trait InputMessage {
     val gameId: GameId
   }
@@ -146,5 +69,108 @@ object Models {
     case object KeepAlive extends OutputMessage {
       override def forPlayer(targetPlayer: PlayerId): Boolean = true
     }
+  }
+}
+
+object GameServerState {
+  sealed trait CreateError
+  case object AlreadyExists extends CreateError
+
+  sealed trait JoinError
+  case object GameDoesNotExist extends JoinError
+  case object SlotTaken extends JoinError
+
+  sealed trait LeaveError
+  type GameUpdate[E] = Either[E, GameServerState]
+}
+
+case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
+  def update(inputMessage: InputMessage): (GameServerState, Seq[OutputMessage]) = inputMessage match {
+    //FIXME: this is weird - we receive a JoinGame event but don't do anything with it
+    case JoinGame(gameId, player) => {
+      games.get(gameId) match {
+        case None =>
+          logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
+          (this, Seq.empty)
+        case Some(game) if game.enoughPlayers => {
+          logger.debug(s"[game: $gameId] Enough players to start game, sending game started event")
+          (this, Seq(GameStarted))
+        }
+        case _ => {
+          logger.debug(s"[game: $gameId] A player joined, but I'm still missing a player to start")
+          (this, Seq.empty)
+        }
+      }
+    }
+    case LeaveGame(gameId, player) => {
+      games.get(gameId) match {
+        case None => {
+          (this, Seq.empty)
+        }
+        case Some(game) => {
+          (this.copy(games.updated(gameId, game.copy(playersInGame = game.playersInGame - player))), Seq(WaitingForPlayers))
+        }
+      }
+    }
+    case PlayMove(gameId, move) => {
+      games.get(gameId) match {
+        case None => {
+          logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
+          (this, Seq.empty)
+        }
+        case Some(g) if !g.enoughPlayers => {
+          logger.error(s"[game: $gameId] Game not in progress")
+          (this, Seq.empty)
+        }
+        case Some(Game(players, activePlayer, moves)) => {
+          if (move.player != activePlayer) {
+            logger.error(s"[game: $gameId] ${move.player} cannot play, they are not the active player!")
+            (this, Seq.empty)
+          } else {
+            val newGameState = {
+              val newActivePlayer = activePlayer match {
+                case Player.X => Player.O
+                case Player.O => Player.X
+              }
+              Game(players, newActivePlayer, move :: moves)
+            }
+            logger.debug(s"[game: $gameId] ${move.player} played move: ${move}")
+            (this.copy(games.updated(gameId, newGameState)), Seq(GameChange(move)))
+          }
+        }
+      }
+    }
+  }
+
+  def joinGame(gameId: GameId, player: Player): GameUpdate[JoinError] = {
+    games.get(gameId) match {
+      case None => {
+        logger.debug(s"[game: $gameId] Does not exist, player $player cannot join")
+        Left(GameDoesNotExist)
+      }
+      case Some(game) if game.playersInGame.contains(player) => {
+        Left(SlotTaken)
+      }
+      case Some(game) => {
+        Right(joinExistingGame(gameId, game, player))
+      }
+    }
+  }
+
+  def createGame(gameId: GameId): GameUpdate[CreateError] = {
+    this.games.get(gameId) match {
+      case Some(_) => Left(AlreadyExists)
+      case None => {
+        val newState = GameServerState(this.games.updated(gameId, Game.create()))
+        Right(newState)
+      }
+    }
+  }
+
+  private def joinExistingGame(gameId: GameId, game: Game, player: Player) = {
+    val newGame = game.add(player)
+    logger.info(s"[game: $gameId] Player $player joined")
+    logger.debug(s"[game: $gameId] New game state: $newGame")
+    GameServerState(this.games.updated(gameId, newGame))
   }
 }

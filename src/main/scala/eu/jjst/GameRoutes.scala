@@ -1,13 +1,15 @@
 package eu.jjst
 
-import java.io.File
 import java.util.concurrent.Executors
 
-import cats.implicits._
 import cats.effect.concurrent.Ref
-import cats.effect.{ Blocker, ContextShift, IO, Sync }
+import cats.effect.{ Blocker, ContextShift, Sync }
+import cats.implicits._
+import com.typesafe.scalalogging.LazyLogging
+import eu.jjst.GameServerState.{ AlreadyExists, GameDoesNotExist, SlotTaken }
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.{ Game, GameServerState, InputMessage, Move, OutputMessage, Player }
+import eu.jjst.Models._
+import eu.jjst.TextCodecs._
 import fs2.concurrent.{ Queue, Topic }
 import fs2.{ Pipe, Stream }
 import org.http4s.dsl.Http4sDsl
@@ -15,9 +17,7 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{ Close, Text }
-import org.http4s.{ HttpRoutes, MediaType, StaticFile }
-import TextCodecs._
-import com.typesafe.scalalogging.LazyLogging
+import org.http4s.{ HttpRoutes, MediaType, Response }
 
 class GameRoutes[F[_]: Sync: ContextShift](
   gameServerState: Ref[F, GameServerState],
@@ -49,21 +49,14 @@ class GameRoutes[F[_]: Sync: ContextShift](
         Ok(outputStream, `Content-Type`(MediaType.text.html))
 
       case PUT -> Root / "games" / gameId => {
-        sealed trait CreateResult
-        case object AlreadyExists extends CreateResult
-        case object Success extends CreateResult
-
         gameServerState
           .modify { state =>
-            state.games.get(gameId) match {
-              case Some(_) => (state, AlreadyExists)
-              case None => (state.createGame(gameId), Success)
+            state.createGame(gameId) match {
+              case Right(g) => (g, Created())
+              case Left(AlreadyExists) => (state, Conflict())
             }
           }
-          .flatMap {
-            case Success => Created()
-            case AlreadyExists => Conflict()
-          }
+          .flatten
       }
       case GET -> Root / "games" / gameId / "debug" =>
         val outputStream = Stream
@@ -81,44 +74,66 @@ class GameRoutes[F[_]: Sync: ContextShift](
         Ok(outputStream, `Content-Type`(MediaType.text.html))
       // Bind a WebSocket connection for a user
       case GET -> Root / "games" / gameId / "ws" / p => {
-        val player: Player = p.toLowerCase match {
-          case "x" => Player.X
-          case "o" => Player.O
-        }
-        // Routes messages from our "topic" to a WebSocket
-        val toClient =
-          topic
-            .subscribe(1000)
-            .map(msg => Text(eu.jjst.Text.encode(msg)))
-
-        // Function that converts a stream of one type to another. Effectively an external "map" function
-        def processInput(wsfStream: Stream[F, WebSocketFrame]) = {
-          // Stream of initialization events for a user
-          val entryStream = Stream.emits(Seq(JoinGame(gameId, player)))
-
-          // Stream that transforms between raw text from the client and parsed InputMessage objects
-          val parsedWebSocketInput =
-            wsfStream
-              .collect {
-                case Text(text, _) => {
-                  PlayMove(gameId, eu.jjst.Text.decode[Move](text))
+        parsePlayer(p) match {
+          case Some(player) => {
+            gameServerState
+              .modify { state =>
+                state.joinGame(gameId, player) match {
+                  case Right(g) => (g, createGameWebsocket(gameId, player))
+                    // I'm getting 501 back instead and I don't get why, but when running the server it correctly handles this
+                  case Left(GameDoesNotExist) => (state, NotFound())
+                  case Left(SlotTaken) => (state, Conflict())
                 }
-
-                // Convert the terminal WebSocket event to a User disconnect message
-                case Close(_) => LeaveGame(gameId, player)
               }
-
-          // Create a stream that has all of the user input sandwiched between the entry and disconnect messages
-          (entryStream ++ parsedWebSocketInput).through(queue.enqueue)
+              .flatten
+          }
+          case None =>
+            NotFound()
         }
-
-        // WebSocketBuilder needs a "pipe" which is a type alias for a stream transformation function like processInput above
-        // This variable is not necessary to compile, but is included to clarify the exact type of Pipe.
-        val inputPipe: Pipe[F, WebSocketFrame, Unit] = processInput
-
-        // Build the WebSocket handler
-        logger.debug("Creating new web socket handler")
-        WebSocketBuilder[F].build(toClient, inputPipe)
       }
     }
+
+  private def parsePlayer(str: String): Option[Player] = {
+    str.toLowerCase match {
+      case "x" => Some(Player.X)
+      case "o" => Some(Player.O)
+      case _ => None
+    }
+  }
+
+  private def createGameWebsocket(gameId: GameId, player: Player): F[Response[F]] = {
+    val toClient =
+      topic
+        .subscribe(1000)
+        .map(msg => Text(eu.jjst.Text.encode(msg)))
+
+    // Function that converts a stream of one type to another. Effectively an external "map" function
+    def processInput(wsfStream: Stream[F, WebSocketFrame]) = {
+      // Stream of initialization events for a user
+      val entryStream = Stream.emits(Seq(JoinGame(gameId, player)))
+
+      // Stream that transforms between raw text from the client and parsed InputMessage objects
+      val parsedWebSocketInput =
+        wsfStream
+          .collect {
+            case Text(text, _) => {
+              PlayMove(gameId, eu.jjst.Text.decode[Move](text))
+            }
+
+            // Convert the terminal WebSocket event to a User disconnect message
+            case Close(_) => LeaveGame(gameId, player)
+          }
+
+      // Create a stream that has all of the user input sandwiched between the entry and disconnect messages
+      (entryStream ++ parsedWebSocketInput).through(queue.enqueue)
+    }
+
+    // WebSocketBuilder needs a "pipe" which is a type alias for a stream transformation function like processInput above
+    // This variable is not necessary to compile, but is included to clarify the exact type of Pipe.
+    val inputPipe: Pipe[F, WebSocketFrame, Unit] = processInput
+
+    // Build the WebSocket handler
+    logger.debug("Creating new web socket handler")
+    WebSocketBuilder[F].build(toClient, inputPipe)
+  }
 }
