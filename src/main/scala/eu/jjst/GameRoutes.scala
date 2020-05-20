@@ -86,7 +86,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
               .modify { state =>
                 state.joinGame(gameId, player) match {
                   case Right(g) => (g, createGameWebsocket(gameId, player))
-                    // I'm getting 501 back instead and I don't get why, but when running the server it correctly handles this
+                  // I'm getting 501 back instead and I don't get why, but when running the server it correctly handles this
                   case Left(GameDoesNotExist) => (state, NotFound())
                   case Left(SlotTaken) => (state, Conflict())
                 }
