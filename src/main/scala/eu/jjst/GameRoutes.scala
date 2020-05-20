@@ -36,15 +36,21 @@ class GameRoutes[F[_]: Sync: ContextShift](
       case GET -> Root / "metrics" =>
         val outputStream = Stream
           .eval(gameServerState.get)
-          .map(state =>
+          .map { state =>
+            val gameCount = state.games.keys.size
+            val games = state.games.map { case (gameId, game) => s"$gameId -> $game" }
             s"""
                |<html>
                |<title>Chat Server State</title>
                |<body>
-               |<div>Games: ${state.games.keys.size}</div>
+               |<div>Games: ${gameCount}</div>
+               |<ul>
+               |${games.map("<li>" + _ + "</li>/n")}
+               |</ul>
                |</body>
                |</html>
-              """.stripMargin)
+              """.stripMargin
+          }
 
         Ok(outputStream, `Content-Type`(MediaType.text.html))
 
