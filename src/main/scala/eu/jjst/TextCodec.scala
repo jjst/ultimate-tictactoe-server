@@ -1,7 +1,7 @@
 package eu.jjst
 
 import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted, KeepAlive }
+import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted, KeepAlive, PlayerJoined, PlayerLeft }
 import eu.jjst.Models.{ Coords, InputMessage, Move, OutputMessage, Player }
 
 trait TextEncoder[T] {
@@ -45,6 +45,8 @@ object TextCodecs {
   implicit val outputMessageEncoder: TextEncoder[OutputMessage] = new TextEncoder[OutputMessage] {
     override def encode(m: OutputMessage): String = m match {
       case KeepAlive => "K"
+      case PlayerJoined => "J"
+      case PlayerLeft => "L"
       case GameStarted => "S"
       case GameChange(move) => moveEncoder.encode(move)
     }
