@@ -45,7 +45,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
                |<body>
                |<div>Games: ${gameCount}</div>
                |<ul>
-               |${games.map("<li>" + _ + "</li>/n")}
+               |${games.map("<li>" + _ + "</li>").mkString("\n")}
                |</ul>
                |</body>
                |</html>
