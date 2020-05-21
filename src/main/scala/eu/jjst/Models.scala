@@ -2,8 +2,8 @@ package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
 import eu.jjst.GameServerState._
-import eu.jjst.Models.InputMessage.{JoinGame, LeaveGame, PlayMove}
-import eu.jjst.Models.OutputMessage.{GameChange, GameStarted, PlayerJoined, PlayerLeft}
+import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
+import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted, PlayerJoined, PlayerLeft }
 import eu.jjst.Models._
 
 object Models {
@@ -60,10 +60,10 @@ object Models {
     case object GameStarted extends OutputMessage {
       override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
     }
-    case object PlayerJoined extends OutputMessage {
+    case class PlayerJoined(player: Player) extends OutputMessage {
       override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
     }
-    case object PlayerLeft extends OutputMessage {
+    case class PlayerLeft(player: Player) extends OutputMessage {
       override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
     }
     case class GameChange(move: Move) extends OutputMessage {
@@ -94,14 +94,14 @@ case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
       games.get(gameId) match {
         case None =>
           logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
-          (this, Seq(PlayerJoined))
+          (this, Seq.empty)
         case Some(game) if game.enoughPlayers => {
           logger.debug(s"[game: $gameId] Enough players to start game, sending game started event")
-          (this, Seq(PlayerJoined, GameStarted))
+          (this, Seq(PlayerJoined(player), GameStarted))
         }
         case _ => {
           logger.debug(s"[game: $gameId] A player joined, but I'm still missing a player to start")
-          (this, Seq.empty)
+          (this, Seq(PlayerJoined(player)))
         }
       }
     }
@@ -111,7 +111,7 @@ case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
           (this, Seq.empty)
         }
         case Some(game) => {
-          (this.copy(games.updated(gameId, game.copy(playersInGame = game.playersInGame - player))), Seq(PlayerLeft))
+          (this.copy(games.updated(gameId, game.copy(playersInGame = game.playersInGame - player))), Seq(PlayerLeft(player)))
         }
       }
     }

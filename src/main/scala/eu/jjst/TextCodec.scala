@@ -18,13 +18,16 @@ object Text {
 }
 
 object TextCodecs {
+  implicit val playerEncoder: TextEncoder[Player] = new TextEncoder[Player] {
+    override def encode(p: Player): String = p match {
+      case Player.X => "X"
+      case Player.O => "O"
+    }
+  }
+
   implicit val moveEncoder: TextEncoder[Move] = new TextEncoder[Move] {
     override def encode(move: Move): String = {
-      val player = move.player match {
-        case Player.X => "X"
-        case Player.O => "O"
-      }
-      s"$player ${move.outerBoardCoords.x} ${move.outerBoardCoords.y} ${move.innerBoardCoords.x} ${move.innerBoardCoords.y}"
+      s"${Text.encode(move.player)} ${move.outerBoardCoords.x} ${move.outerBoardCoords.y} ${move.innerBoardCoords.x} ${move.innerBoardCoords.y}"
     }
   }
 
@@ -45,10 +48,10 @@ object TextCodecs {
   implicit val outputMessageEncoder: TextEncoder[OutputMessage] = new TextEncoder[OutputMessage] {
     override def encode(m: OutputMessage): String = m match {
       case KeepAlive => "K"
-      case PlayerJoined => "J"
-      case PlayerLeft => "L"
+      case PlayerJoined(p) => s"J ${Text.encode(p)}"
+      case PlayerLeft(p) => s"L ${Text.encode(p)}"
       case GameStarted => "S"
-      case GameChange(move) => moveEncoder.encode(move)
+      case GameChange(move) => "M " + moveEncoder.encode(move)
     }
   }
 }
