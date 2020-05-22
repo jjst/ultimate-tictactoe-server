@@ -11,7 +11,7 @@ class TextCodecsSpec extends WordSpec with Matchers {
       val move = Move(Player.X, Coords(2, 1), Coords(0, 2))
       val encoded = Text.encode(move)
       val decoded = Text.decode(encoded)
-      decoded shouldBe move
+      decoded shouldBe Right(move)
     }
   }
 }

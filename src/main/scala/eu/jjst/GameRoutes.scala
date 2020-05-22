@@ -123,12 +123,20 @@ class GameRoutes[F[_]: Sync: ContextShift](
         wsfStream
           .collect {
             case Text(text, _) => {
-              PlayMove(gameId, eu.jjst.Text.decode[Move](text))
+              //FIXME: hackish a.f.
+              eu.jjst.Text.decode[Move](text.tail.trim) match {
+                case Right(move) => Stream(PlayMove(gameId, move))
+                case Left(_) => {
+                  logger.warn(s"Received invalid input message: $text")
+                  Stream.empty
+                }
+              }
             }
 
             // Convert the terminal WebSocket event to a User disconnect message
-            case Close(_) => LeaveGame(gameId, player)
+            case Close(_) => Stream(LeaveGame(gameId, player))
           }
+          .flatten
 
       // Create a stream that has all of the user input sandwiched between the entry and disconnect messages
       (entryStream ++ parsedWebSocketInput).through(queue.enqueue)
