@@ -70,7 +70,7 @@ case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
           // - a player joined event
           // + all the moves played so far
           val outputMessages: List[OutputMessage] =
-            PlayerJoined(player) :: game.moves.map(sendAlreadyPlayedMove(player)) ::: (if (game.enoughPlayers) List(GameStarted) else List.empty)
+            PlayerJoined(player) :: game.moves.reverse.map(sendAlreadyPlayedMove(player)) ::: (if (game.enoughPlayers) List(GameStarted) else List.empty)
           (this, outputMessages)
         }
       }
