@@ -15,7 +15,6 @@ object InputMessage {
 trait OutputMessage {
   // To support stream filtering
   def forPlayer(p: Player): Boolean
-  def toString: String
 }
 
 object OutputMessage {

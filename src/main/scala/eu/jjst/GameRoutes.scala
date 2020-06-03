@@ -111,6 +111,7 @@ class GameRoutes[F[_]: Sync: ContextShift](
     val toClient =
       topic
         .subscribe(1000)
+        .filter(_.forPlayer(player))
         .map(msg => Text(eu.jjst.Text.encode(msg)))
 
     // Function that converts a stream of one type to another. Effectively an external "map" function
