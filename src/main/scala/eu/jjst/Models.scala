@@ -2,9 +2,9 @@ package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
 import eu.jjst.GameServerState._
-import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
-import eu.jjst.Models.OutputMessage.{ GameChange, GameStarted, PlayerJoined, PlayerLeft }
+import eu.jjst.InputMessage.{ JoinGame, LeaveGame, PlayMove }
 import eu.jjst.Models._
+import eu.jjst.OutputMessage.{ MovePlayed, GameStarted, PlayerJoined, PlayerLeft }
 
 object Models {
   case class Coords(x: Int, y: Int)
@@ -12,7 +12,6 @@ object Models {
 
   //FIXME: use tagged types or something typesafer
   type GameId = String
-  type PlayerId = String
 
   sealed trait Player
 
@@ -40,39 +39,6 @@ object Models {
     def enoughPlayers: Boolean = playersInGame.size >= 2
   }
 
-  sealed trait InputMessage {
-    val gameId: GameId
-  }
-
-  object InputMessage {
-    case class JoinGame(gameId: GameId, player: Player) extends InputMessage
-    case class LeaveGame(gameId: GameId, player: Player) extends InputMessage
-    case class PlayMove(gameId: GameId, move: Move) extends InputMessage
-  }
-
-  trait OutputMessage {
-    // To support stream filtering
-    def forPlayer(targetPlayer: PlayerId): Boolean
-    def toString: String
-  }
-
-  object OutputMessage {
-    case object GameStarted extends OutputMessage {
-      override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
-    }
-    case class PlayerJoined(player: Player) extends OutputMessage {
-      override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
-    }
-    case class PlayerLeft(player: Player) extends OutputMessage {
-      override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
-    }
-    case class GameChange(move: Move) extends OutputMessage {
-      override def forPlayer(targetPlayer: PlayerId): Boolean = true //FIXME
-    }
-    case object KeepAlive extends OutputMessage {
-      override def forPlayer(targetPlayer: PlayerId): Boolean = true
-    }
-  }
 }
 
 object GameServerState {
@@ -93,15 +59,19 @@ case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
     case JoinGame(gameId, player) => {
       games.get(gameId) match {
         case None =>
-          logger.error(s"[game: $gameId] Game doesn't exist, cannot play move")
+          logger.error(s"[game: $gameId] Game doesn't exist, cannot join")
           (this, Seq.empty)
-        case Some(game) if game.enoughPlayers => {
-          logger.debug(s"[game: $gameId] Enough players to start game, sending game started event")
-          (this, Seq(PlayerJoined(player), GameStarted))
-        }
-        case _ => {
-          logger.debug(s"[game: $gameId] A player joined, but I'm still missing a player to start")
-          (this, Seq(PlayerJoined(player)))
+        case Some(game) => {
+          if (game.enoughPlayers)
+            logger.debug(s"[game: $gameId] Enough players to start game, sending game started event")
+          else
+            logger.debug(s"[game: $gameId] A player joined, but I'm still missing a player to start")
+          // We send:
+          // - a player joined event
+          // + all the moves played so far
+          val outputMessages: List[OutputMessage] =
+            PlayerJoined(player) :: game.moves.map(sendAlreadyPlayedMove(player)) ::: (if (game.enoughPlayers) List(GameStarted) else List.empty)
+          (this, outputMessages)
         }
       }
     }
@@ -138,12 +108,14 @@ case class GameServerState(games: Map[GameId, Game]) extends LazyLogging {
               Game(players, newActivePlayer, move :: moves)
             }
             logger.debug(s"[game: $gameId] ${move.player} played move: ${move}")
-            (this.copy(games.updated(gameId, newGameState)), Seq(GameChange(move)))
+            (this.copy(games.updated(gameId, newGameState)), Seq(MovePlayed(move)))
           }
         }
       }
     }
   }
+
+  def sendAlreadyPlayedMove(targetPlayer: Player)(move: Move) = MovePlayed(move, Some(targetPlayer))
 
   def joinGame(gameId: GameId, player: Player): GameUpdate[JoinError] = {
     games.get(gameId) match {

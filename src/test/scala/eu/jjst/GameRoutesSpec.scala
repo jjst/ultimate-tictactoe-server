@@ -2,8 +2,8 @@ package eu.jjst
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import eu.jjst.Models.OutputMessage.KeepAlive
-import eu.jjst.Models.{ Game, InputMessage, OutputMessage, Player }
+import eu.jjst.Models.{ Game, Player }
+import eu.jjst.OutputMessage.KeepAlive
 import fs2.concurrent.{ Queue, Topic }
 import org.http4s.dsl.io._
 import org.http4s.implicits._

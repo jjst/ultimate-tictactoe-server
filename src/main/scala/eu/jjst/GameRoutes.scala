@@ -7,7 +7,7 @@ import cats.effect.{ Blocker, ContextShift, Sync }
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
 import eu.jjst.GameServerState.{ AlreadyExists, GameDoesNotExist, SlotTaken }
-import eu.jjst.Models.InputMessage.{ JoinGame, LeaveGame, PlayMove }
+import eu.jjst.InputMessage.{ JoinGame, LeaveGame, PlayMove }
 import eu.jjst.Models._
 import eu.jjst.TextCodecs._
 import fs2.concurrent.{ Queue, Topic }

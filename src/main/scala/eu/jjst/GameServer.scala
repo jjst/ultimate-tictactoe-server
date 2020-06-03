@@ -5,8 +5,7 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.typesafe.scalalogging.LazyLogging
-import eu.jjst.Models.OutputMessage.KeepAlive
-import eu.jjst.Models.{ InputMessage, OutputMessage }
+import eu.jjst.OutputMessage.KeepAlive
 import fs2.Stream
 import fs2.concurrent.{ Queue, Topic }
 import org.http4s.{ HttpRoutes, Request, Response }

@@ -1,8 +1,8 @@
 package eu.jjst
 
 import com.typesafe.scalalogging.LazyLogging
-import eu.jjst.Models.OutputMessage._
-import eu.jjst.Models.{ Coords, Move, OutputMessage, Player }
+import eu.jjst.Models.{ Coords, Move, Player }
+import eu.jjst.OutputMessage.{ GameStarted, KeepAlive, MovePlayed, PlayerJoined, PlayerLeft }
 
 trait TextEncoder[T] {
   def encode(t: T): String
@@ -56,7 +56,7 @@ object TextCodecs extends LazyLogging {
       case PlayerJoined(p) => s"J ${Text.encode(p)}"
       case PlayerLeft(p) => s"L ${Text.encode(p)}"
       case GameStarted => "S"
-      case GameChange(move) => "M " + moveEncoder.encode(move)
+      case MovePlayed(move, _) => "M " + moveEncoder.encode(move)
     }
   }
 }
